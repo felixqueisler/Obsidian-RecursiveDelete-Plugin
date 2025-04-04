@@ -1,11 +1,18 @@
-import { App, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
+import { Notice, TFile, App, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { FileListModal } from './file-list-modal';
 
 interface RecursiveNoteDeleterSettings {
   confirmDeletion: boolean;
+  recursiveDelete: boolean;
+  deleteMode: 'both' | 'notes-only' | 'attachments-only';
+  removeBacklinks: boolean; // New setting for removing backlinks
 }
 
 const DEFAULT_SETTINGS: RecursiveNoteDeleterSettings = {
-  confirmDeletion: true
+  confirmDeletion: true,
+  recursiveDelete: true,
+  deleteMode: 'both',
+  removeBacklinks: false // Default to off
 }
 
 export default class RecursiveNoteDeleter extends Plugin {
@@ -27,59 +34,139 @@ export default class RecursiveNoteDeleter extends Plugin {
   }
 
   async deleteLinkedNotes(file: TFile) {
-	const linkedFiles = this.getLinkedFiles(file);
-	if (linkedFiles.length === 0) {
-	  new Notice('No linked notes or attachments found.');
+	const linkedFiles = this.getLinkedFiles(file, new Set());
+	const filesToDelete = this.filterFilesToDelete(linkedFiles);
+
+	if (filesToDelete.length === 0) {
+	  this.showNoFilesFoundNotice();
 	  return;
 	}
 
 	if (this.settings.confirmDeletion) {
-	  const confirm = await this.confirmDeletion(linkedFiles);
+	  const confirm = await this.confirmDeletion(filesToDelete);
 	  if (!confirm) {
 		return;
 	  }
 	}
 
-	linkedFiles.forEach(linkedFile => {
+	filesToDelete.forEach(linkedFile => {
 	  this.app.vault.delete(linkedFile);
 	});
-	new Notice('Linked notes and attachments deleted.');
+
+	if (this.settings.removeBacklinks) {
+	  this.removeBacklinks(filesToDelete);
+	}
+
+	this.showDeletionSuccessNotice();
   }
 
-  getLinkedFiles(file: TFile): TFile[] {
-	const linkedFiles: TFile[] = [];
+  getLinkedFiles(file: TFile, visited: Set<TFile>): TFile[] {
+	const linkedFilesSet = new Set<TFile>();
 	const cache = this.app.metadataCache.getFileCache(file);
-	if (cache) {
+
+	if (cache && !visited.has(file)) {
+	  visited.add(file);
+
+	  // Process links (e.g., [[Wiki-style links]])
 	  const links = cache.links;
-	  links.forEach(link => {
-		const linkedFile = this.app.metadataCache.getFirstLinkpathDest(link.link, file.path);
-		if (linkedFile) {
-		  linkedFiles.push(linkedFile);
-		  linkedFiles.push(...this.getLinkedFiles(linkedFile)); // Recursive call
+	  if (links && Array.isArray(links)) {
+		links.forEach(link => {
+		  const linkedFile = this.app.metadataCache.getFirstLinkpathDest(link.link, file.path);
+		  if (linkedFile && !visited.has(linkedFile)) {
+			linkedFilesSet.add(linkedFile);
+			if (this.settings.recursiveDelete) {
+			  try {
+				this.getLinkedFiles(linkedFile, visited).forEach(f => linkedFilesSet.add(f)); // Recursive call
+			  } catch (error) {
+				console.error(`Error processing linked file: ${linkedFile.path}`, error);
+			  }
+			}
+		  }
+		});
+	  } else {
+		console.warn(`No links found or links is not an array in cache for file: ${file.path}`);
+	  }
+
+	  // Process embeds (e.g., ![[image.jpg]])
+	  const embeds = cache.embeds;
+	  if (embeds && Array.isArray(embeds)) {
+		embeds.forEach(embed => {
+		  const embeddedFile = this.app.metadataCache.getFirstLinkpathDest(embed.link, file.path);
+		  if (embeddedFile && !visited.has(embeddedFile)) {
+			linkedFilesSet.add(embeddedFile);
+		  }
+		});
+	  } else {
+		console.warn(`No embeds found or embeds is not an array in cache for file: ${file.path}`);
+	  }
+	} else {
+	  console.warn(`No cache found or file already visited: ${file.path}`);
+	}
+
+	return Array.from(linkedFilesSet);
+  }
+
+  filterFilesToDelete(files: TFile[]): TFile[] {
+	return files.filter(file => {
+	  if (this.settings.deleteMode === 'notes-only' && file.extension !== 'md') {
+		return false; // Skip non-note files
+	  }
+	  if (this.settings.deleteMode === 'attachments-only' && file.extension === 'md') {
+		return false; // Skip note files
+	  }
+	  return true;
+	});
+  }
+
+  confirmDeletion(files: TFile[]): Promise<boolean> {
+	return new Promise((resolve) => {
+	  new FileListModal(this.app, files, (result) => {
+		resolve(result);
+	  }).open();
+	});
+  }
+
+  removeBacklinks(files: TFile[]) {
+	const filePaths = files.map(file => file.path);
+	this.app.vault.getMarkdownFiles().forEach(note => {
+	  this.app.vault.process(note, (data) => {
+		let changed = false;
+		const lines = data.split('\n');
+		const newLines = lines.filter(line => {
+		  const hasLink = filePaths.some(path => line.includes(`[[${path}]]`) || line.includes(`![[${path}]]`));
+		  if (hasLink) {
+			changed = true;
+			return false; // Remove the line
+		  }
+		  return true;
+		});
+		if (changed) {
+		  this.app.vault.modify(note, newLines.join('\n'));
 		}
 	  });
-	}
-	return linkedFiles;
+	});
   }
 
-  async confirmDeletion(files: TFile[]): Promise<boolean> {
-	const fileList = files.map(file => file.path).join('\n');
-	return new Promise((resolve) => {
-	  new Notice(`Are you sure you want to delete the following files?\n${fileList}`, 5000);
-	  const confirmButton = document.createElement('button');
-	  confirmButton.textContent = 'Confirm';
-	  confirmButton.onclick = () => {
-		resolve(true);
-	  };
-	  document.body.appendChild(confirmButton);
+  showNoFilesFoundNotice() {
+	const mode = this.settings.deleteMode;
+	let message = 'No linked items found to delete.';
+	if (mode === 'notes-only') {
+	  message = 'No linked notes found to delete.';
+	} else if (mode === 'attachments-only') {
+	  message = 'No linked attachments found to delete.';
+	}
+	new Notice(message);
+  }
 
-	  const cancelButton = document.createElement('button');
-	  cancelButton.textContent = 'Cancel';
-	  cancelButton.onclick = () => {
-		resolve(false);
-	  };
-	  document.body.appendChild(cancelButton);
-	});
+  showDeletionSuccessNotice() {
+	const mode = this.settings.deleteMode;
+	let message = 'Linked notes and attachments deleted.';
+	if (mode === 'notes-only') {
+	  message = 'Linked notes deleted.';
+	} else if (mode === 'attachments-only') {
+	  message = 'Linked attachments deleted.';
+	}
+	new Notice(message);
   }
 
   onunload() {
@@ -115,6 +202,41 @@ class RecursiveNoteDeleterSettingTab extends PluginSettingTab {
 		.setValue(this.plugin.settings.confirmDeletion)
 		.onChange(async (value) => {
 		  this.plugin.settings.confirmDeletion = value;
+		  await this.plugin.saveSettings();
+		}));
+
+	new Setting(containerEl)
+	  .setName('Recursive Delete')
+	  .setDesc('Delete linked notes and attachments recursively.')
+	  .addToggle(toggle => toggle
+		.setValue(this.plugin.settings.recursiveDelete)
+		.onChange(async (value) => {
+		  this.plugin.settings.recursiveDelete = value;
+		  await this.plugin.saveSettings();
+		}));
+
+	new Setting(containerEl)
+	  .setName('Delete Mode')
+	  .setDesc('Choose what to delete: notes, attachments, or both.')
+	  .addDropdown(dropdown => dropdown
+		.addOptions({
+		  both: 'Delete both notes and attachments',
+		  'notes-only': 'Delete only notes',
+		  'attachments-only': 'Delete only attachments'
+		})
+		.setValue(this.plugin.settings.deleteMode)
+		.onChange(async (value) => {
+		  this.plugin.settings.deleteMode = value as RecursiveNoteDeleterSettings['deleteMode'];
+		  await this.plugin.saveSettings();
+		}));
+
+	new Setting(containerEl)
+	  .setName('Remove Backlinks')
+	  .setDesc('Automatically remove backlinks to deleted files.')
+	  .addToggle(toggle => toggle
+		.setValue(this.plugin.settings.removeBacklinks)
+		.onChange(async (value) => {
+		  this.plugin.settings.removeBacklinks = value;
 		  await this.plugin.saveSettings();
 		}));
   }
