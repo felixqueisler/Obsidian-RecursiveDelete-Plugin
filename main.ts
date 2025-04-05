@@ -1,18 +1,24 @@
 import { Notice, TFile, App, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import { FileListModal } from './file-list-modal';
+import * as fs from 'fs';
+import * as path from 'path';
 
 interface RecursiveNoteDeleterSettings {
   confirmDeletion: boolean;
   recursiveDelete: boolean;
   deleteMode: 'both' | 'notes-only' | 'attachments-only';
-  removeBacklinks: boolean; // New setting for removing backlinks
+  removeBacklinks: boolean;
+  enableBackup: boolean;
+  backupLocation: string;
 }
 
 const DEFAULT_SETTINGS: RecursiveNoteDeleterSettings = {
   confirmDeletion: true,
   recursiveDelete: true,
   deleteMode: 'both',
-  removeBacklinks: false // Default to off
+  removeBacklinks: false,
+  enableBackup: false,
+  backupLocation: ''
 }
 
 export default class RecursiveNoteDeleter extends Plugin {
@@ -47,6 +53,10 @@ export default class RecursiveNoteDeleter extends Plugin {
 	  if (!confirm) {
 		return;
 	  }
+	}
+
+	if (this.settings.enableBackup) {
+	  this.backupFiles(filesToDelete);
 	}
 
 	filesToDelete.forEach(linkedFile => {
@@ -124,6 +134,27 @@ export default class RecursiveNoteDeleter extends Plugin {
 		resolve(result);
 	  }).open();
 	});
+  }
+
+  backupFiles(files: TFile[]) {
+	if (!this.settings.backupLocation) {
+	  new Notice('Backup location is not set.');
+	  return;
+	}
+
+	files.forEach(file => {
+	  const filePath = path.join(this.app.vault.adapter.basePath, file.path);
+	  const backupPath = path.join(this.settings.backupLocation, file.path);
+	  const backupDir = path.dirname(backupPath);
+
+	  if (!fs.existsSync(backupDir)) {
+		fs.mkdirSync(backupDir, { recursive: true });
+	  }
+
+	  fs.copyFileSync(filePath, backupPath);
+	});
+
+	new Notice('Files backed up successfully.');
   }
 
   removeBacklinks(files: TFile[]) {
@@ -239,5 +270,46 @@ class RecursiveNoteDeleterSettingTab extends PluginSettingTab {
 		  this.plugin.settings.removeBacklinks = value;
 		  await this.plugin.saveSettings();
 		}));
+
+	const backupLocationSetting = new Setting(containerEl)
+	  .setName('Backup Location')
+	  .setDesc('Set the folder location for backing up files.')
+	  .addButton(button => button
+		.setButtonText('Choose Folder')
+		.onClick(async () => {
+		  const { dialog } = require('electron').remote;
+		  const folder = await dialog.showOpenDialog({
+			properties: ['openDirectory'],
+		  });
+		  if (folder && folder.filePaths.length > 0) {
+			this.plugin.settings.backupLocation = folder.filePaths[0];
+			await this.plugin.saveSettings();
+			backupLocationSetting.setDesc(this.plugin.settings.backupLocation);
+			enableBackupSetting.setDisabled(false);
+		  }
+		}));
+
+	if (this.plugin.settings.backupLocation) {
+	  backupLocationSetting.setDesc(this.plugin.settings.backupLocation);
+	} else {
+	  backupLocationSetting.setDesc('No folder selected');
+	}
+
+	const enableBackupSetting = new Setting(containerEl)
+	  .setName('Enable Backup')
+	  .setDesc('Enable backing up files before deletion.')
+	  .addToggle(toggle => {
+		toggle.setValue(this.plugin.settings.enableBackup);
+		toggle.onChange(async (value) => {
+		  this.plugin.settings.enableBackup = value;
+		  await this.plugin.saveSettings();
+		});
+		if (!this.plugin.settings.backupLocation) {
+		  toggle.setDisabled(true);
+		} else {
+		  toggle.setDisabled(false);
+		}
+		return toggle;
+	  });
   }
 }
