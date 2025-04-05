@@ -161,6 +161,10 @@ export default class RecursiveNoteDeleter extends Plugin {
 	const filePaths = files.map(file => file.path);
 	this.app.vault.getMarkdownFiles().forEach(note => {
 	  this.app.vault.process(note, (data) => {
+		if (!data) {
+		  console.error(`No data found for file: ${note.path}`);
+		  return;
+		}
 		let changed = false;
 		const lines = data.split('\n');
 		const newLines = lines.filter(line => {
@@ -274,9 +278,12 @@ class RecursiveNoteDeleterSettingTab extends PluginSettingTab {
 	const backupLocationSetting = new Setting(containerEl)
 	  .setName('Backup Location')
 	  .setDesc('Set the folder location for backing up files.')
-	  .addButton(button => button
-		.setButtonText('Choose Folder')
-		.onClick(async () => {
+	  .addButton(button => {
+		button.setButtonText('Choose Folder');
+		if (!this.plugin.settings.backupLocation) {
+		  button.setDisabled(false);
+		}
+		button.onClick(async () => {
 		  const { dialog } = require('electron').remote;
 		  const folder = await dialog.showOpenDialog({
 			properties: ['openDirectory'],
@@ -286,8 +293,13 @@ class RecursiveNoteDeleterSettingTab extends PluginSettingTab {
 			await this.plugin.saveSettings();
 			backupLocationSetting.setDesc(this.plugin.settings.backupLocation);
 			enableBackupSetting.setDisabled(false);
+			new Notice('Backup location set successfully.');
+		  } else {
+			new Notice('No folder selected. Backup location is not set.');
 		  }
-		}));
+		});
+		return button;
+	  });
 
 	if (this.plugin.settings.backupLocation) {
 	  backupLocationSetting.setDesc(this.plugin.settings.backupLocation);
