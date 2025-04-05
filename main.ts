@@ -155,30 +155,78 @@ export default class RecursiveNoteDeleter extends Plugin {
 	new Notice('Files backed up successfully.');
   }
 
-  removeBacklinks(files: TFile[]) {
-	const filePaths = files.map(file => file.path);
-	this.app.vault.getMarkdownFiles().forEach(note => {
-	  this.app.vault.process(note, (data) => {
-		if (!data) {
-		  console.error(`No data found for file: ${note.path}`);
+removeBacklinks(files: TFile[]) {
+	  console.log('removeBacklinks method triggered');
+	  const filePaths = files.map(file => file.path);
+	  const fileNames = files.map(file => file.name.replace(/\.md$/, '')); // Get file names without .md extension
+	  console.log('Files to remove backlinks for:', filePaths);
+  
+	  if (filePaths.length === 0) {
+		console.log('No files to process for backlink removal.');
+		return;
+	  }
+  
+	  filePaths.forEach(filePath => {
+		console.log(`Processing file: ${filePath}`);
+  
+		// Use Obsidian's API to get backlinks
+		const backlinks = this.app.metadataCache.getBacklinksForFile(this.app.vault.getAbstractFileByPath(filePath) as TFile);
+		console.log(`Backlinks for file ${filePath}:`, backlinks);
+  
+		if (backlinks.data.size === 0) {
+		  console.log(`No backlinks found for file: ${filePath}`);
 		  return;
 		}
-		let changed = false;
-		const lines = data.split('\n');
-		const newLines = lines.filter(line => {
-		  const hasLink = filePaths.some(path => line.includes(`[[${path}]]`) || line.includes(`![[${path}]]`));
-		  if (hasLink) {
-			changed = true;
-			return false;
+  
+		backlinks.data.forEach((backlinkData, backlinkPath) => {
+		  const backlinkFile = this.app.vault.getAbstractFileByPath(backlinkPath) as TFile;
+		  if (!backlinkFile) {
+			console.error(`No file found for path: ${backlinkPath}`);
+			return;
 		  }
-		  return true;
+		  console.log(`Processing backlink in file: ${backlinkPath}`);
+  
+		  this.app.vault.read(backlinkFile).then((data) => {
+			if (data == null) {
+			  console.error(`No data found for file: ${backlinkPath}`);
+			  return;
+			}
+			console.log(`File data for ${backlinkPath}:`, data);
+  
+			let changed = false;
+			const lines = data.split('\n');
+			const newLines = lines.filter(line => {
+			  const hasLink = fileNames.some(name => {
+				const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape special characters
+				console.log(`Checking name against regex: ${name}`);
+				const linkPattern = new RegExp(`\\[\\[.*?${escapedName}(?:\\.md)?(?:#.*)?\\]\\]|!\\[\\[.*?${escapedName}(?:\\.md)?(?:#.*)?\\]\\]`, 'i');
+				const found = linkPattern.test(line);
+				if (found) {
+				  console.log(`Found backlink to ${name} in line: ${line}`);
+				}
+				return found;
+			  });
+			  if (hasLink) {
+				changed = true;
+				console.log(`Removed backlink to ${name} in file: ${backlinkPath}`);
+				return false;
+			  }
+			  return true;
+			});
+			if (changed) {
+			  console.log(`Modifying file: ${backlinkPath}`);
+			  this.app.vault.modify(backlinkFile, newLines.join('\n'));
+			} else {
+			  console.log(`No changes needed for file: ${backlinkPath}`);
+			}
+		  }).catch((error) => {
+			console.error(`Error reading file: ${backlinkPath}`, error);
+		  });
 		});
-		if (changed) {
-		  this.app.vault.modify(note, newLines.join('\n'));
-		}
 	  });
-	});
   }
+
+
 
   showNoFilesFoundNotice() {
 	const mode = this.settings.deleteMode;
