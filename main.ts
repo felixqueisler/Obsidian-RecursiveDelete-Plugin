@@ -294,8 +294,6 @@ class RecursiveNoteDeleterSettingTab extends PluginSettingTab {
 			backupLocationSetting.setDesc(this.plugin.settings.backupLocation);
 			enableBackupSetting.setDisabled(false);
 			new Notice('Backup location set successfully.');
-		  } else {
-			new Notice('No folder selected. Backup location is not set.');
 		  }
 		});
 		return button;
