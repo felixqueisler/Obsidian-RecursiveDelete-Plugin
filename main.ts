@@ -77,7 +77,6 @@ export default class RecursiveNoteDeleter extends Plugin {
 	if (cache && !visited.has(file)) {
 	  visited.add(file);
 
-	  // Process links (e.g., [[Wiki-style links]])
 	  const links = cache.links;
 	  if (links && Array.isArray(links)) {
 		links.forEach(link => {
@@ -86,7 +85,7 @@ export default class RecursiveNoteDeleter extends Plugin {
 			linkedFilesSet.add(linkedFile);
 			if (this.settings.recursiveDelete) {
 			  try {
-				this.getLinkedFiles(linkedFile, visited).forEach(f => linkedFilesSet.add(f)); // Recursive call
+				this.getLinkedFiles(linkedFile, visited).forEach(f => linkedFilesSet.add(f));
 			  } catch (error) {
 				console.error(`Error processing linked file: ${linkedFile.path}`, error);
 			  }
@@ -97,7 +96,6 @@ export default class RecursiveNoteDeleter extends Plugin {
 		console.warn(`No links found or links is not an array in cache for file: ${file.path}`);
 	  }
 
-	  // Process embeds (e.g., ![[image.jpg]])
 	  const embeds = cache.embeds;
 	  if (embeds && Array.isArray(embeds)) {
 		embeds.forEach(embed => {
@@ -119,10 +117,10 @@ export default class RecursiveNoteDeleter extends Plugin {
   filterFilesToDelete(files: TFile[]): TFile[] {
 	return files.filter(file => {
 	  if (this.settings.deleteMode === 'notes-only' && file.extension !== 'md') {
-		return false; // Skip non-note files
+		return false;
 	  }
 	  if (this.settings.deleteMode === 'attachments-only' && file.extension === 'md') {
-		return false; // Skip note files
+		return false;
 	  }
 	  return true;
 	});
@@ -171,7 +169,7 @@ export default class RecursiveNoteDeleter extends Plugin {
 		  const hasLink = filePaths.some(path => line.includes(`[[${path}]]`) || line.includes(`![[${path}]]`));
 		  if (hasLink) {
 			changed = true;
-			return false; // Remove the line
+			return false;
 		  }
 		  return true;
 		});
@@ -226,7 +224,7 @@ class RecursiveNoteDeleterSettingTab extends PluginSettingTab {
   }
 
   display(): void {
-	const {containerEl} = this;
+	const { containerEl } = this;
 
 	containerEl.empty();
 
@@ -280,9 +278,6 @@ class RecursiveNoteDeleterSettingTab extends PluginSettingTab {
 	  .setDesc('Set the folder location for backing up files.')
 	  .addButton(button => {
 		button.setButtonText('Choose Folder');
-		if (!this.plugin.settings.backupLocation) {
-		  button.setDisabled(false);
-		}
 		button.onClick(async () => {
 		  const { dialog } = require('electron').remote;
 		  const folder = await dialog.showOpenDialog({
@@ -316,6 +311,11 @@ class RecursiveNoteDeleterSettingTab extends PluginSettingTab {
 		});
 		if (!this.plugin.settings.backupLocation) {
 		  toggle.setDisabled(true);
+		  toggle.toggleEl.addEventListener('click', () => {
+			if (!this.plugin.settings.backupLocation) {
+			  new Notice('Backup location is not set. Please choose a backup location first.');
+			}
+		  });
 		} else {
 		  toggle.setDisabled(false);
 		}
