@@ -12,7 +12,8 @@ export class FileListModal extends Modal {
 
   onOpen() {
 	const { contentEl } = this;
-	contentEl.createEl('h3', { text: 'Files to be deleted:' });
+	const fileCount = this.files.length;
+	contentEl.createEl('h3', { text: `Files to be deleted: ${fileCount}` });
 
 	// Set up the modal content with flex layout
 	contentEl.style.display = 'flex';
