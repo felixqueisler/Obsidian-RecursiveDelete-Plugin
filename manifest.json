@@ -1,7 +1,7 @@
 {
   "id": "recursive-note-deleter",
   "name": "Recursive Note Deleter",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "minAppVersion": "1.0.0",
   "description": "When run in an open note this plugin will recursively find all linked notes from that note, all following notes, including attachments. Then it will list them and delete them after prompting you.",
   "author": "Felix Queisler",
