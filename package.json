@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-sample-plugin",
-	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"name": "obsidian-recursivedelete-plugin",
+	"version": "1.0.2",
+	"description": "When run in an open note this plugin will recursively find all linked notes from that note, all following notes, including attachments. Then it will list them and delete them after prompting you.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
