@@ -5,5 +5,6 @@
   "minAppVersion": "1.0.0",
   "description": "When run in an open note this plugin will recursively find all linked notes from that note, all following notes, including attachments. Then it will list them and delete them after prompting you.",
   "author": "Felix Queisler",
+  "fundingUrl": "https://ko-fi.com/felixqueisler",
   "isDesktopOnly": true
 }
