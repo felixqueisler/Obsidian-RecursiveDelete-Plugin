@@ -1,10 +1,10 @@
 # Obsidian Recursive Note Deleter Plugin
 
-This is a plugin with which you can recursively go through notes and linked notes of those notes to delete them all. **THIS PLUGIN IS PURPOSEFULLY HIGHLY DESTRUCTIVE.** I created this plugin to deal with stray trees of notes which came from old Notion database imports. This plugin is based on the obsidian sample plugin code and was adjusted to the desired functionality.
+Recursively go through Obsidian notes and linked notes/attachments of those notes to delete them all. **THIS PLUGIN IS PURPOSEFULLY HIGHLY DESTRUCTIVE.** I created this plugin to deal with stray trees of notes which came from old Notion database imports. This plugin is based on the obsidian sample plugin code and was adjusted to the desired functionality.
 
-This plugin adds an extensive list of settings to further specify deletion behaviour. This plugins default behaviour asks before deleting notes. However, i advise you to **backup your vault** before using this plugin.
+In the settings you have many options to further specify deletion behaviour. This plugins default behaviour asks before deleting notes. However, i advise you to **backup your vault** before using this plugin.
 
-This plugin adds a 💀 ribbon icon which will open a dialog in which you can check what files would be removed if you proceed. (provided you didn't disable confirm deletion in the settings)
+A 💀 ribbon icon is added which will open the dialog in which you can check what files would be removed if you proceed. (provided you didn't disable confirm deletion in the settings)
 
 <img width="1377" height="654" alt="RecursiveNoteDelete-Screenshot" src="https://github.com/user-attachments/assets/fec875b5-e863-4a6c-9a4f-35cabf71c824" />
 
