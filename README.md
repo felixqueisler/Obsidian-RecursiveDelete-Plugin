@@ -6,6 +6,8 @@ This plugin adds an extensive list of settings to further specify deletion behav
 
 This plugin adds a 💀 ribbon icon which will open a dialog in which you can check what files would be removed if you proceed. (provided you didn't disable confirm deletion in the settings)
 
+<img width="1377" height="654" alt="RecursiveNoteDelete-Screenshot" src="https://github.com/user-attachments/assets/fec875b5-e863-4a6c-9a4f-35cabf71c824" />
+
 ## Features
 - Delete notes linked in the active note
 - Delete notes linked in the active note and recursively delete all further linked notes to an unlimited depth
@@ -31,7 +33,7 @@ settings pane
 
 ## Manually installing the plugin
 
-- Copy over `main.js`, and `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+- Copy over `main.js` (generate it with npm run dev), `styles.css`,  and `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
 
 ## API Documentation
 
