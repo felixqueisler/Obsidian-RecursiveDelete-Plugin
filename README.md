@@ -33,7 +33,7 @@ settings pane
 
 ## Manually installing the plugin
 
-- Copy over `main.js`, and `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+- Copy over `main.js` (generate it with npm run dev), `styles.css`,  and `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
 
 ## API Documentation
 
