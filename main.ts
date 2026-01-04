@@ -198,7 +198,6 @@ export default class RecursiveNoteDeleter extends Plugin {
 					console.log(`File data for ${backlinkPath}:`, data);
 
 					let changed = false;
-					let newContent = data;
 					const lines = data.split('\n');
 					const newLines = [];
 
