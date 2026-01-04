@@ -1,7 +1,12 @@
-import { Notice, TFile, App, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { Notice, TFile, App, Plugin, PluginSettingTab, Setting, LinkCache } from 'obsidian';
 import { FileListModal } from './file-list-modal';
 import * as fs from 'fs';
 import * as path from 'path';
+
+// Definition für die interne Obsidian API, damit TypeScript nicht meckert
+interface InternalMetadataCache {
+	getBacklinksForFile(file: TFile): { data: Map<string, LinkCache[]> } | null;
+}
 
 interface RecursiveNoteDeleterSettings {
 	confirmDeletion: boolean;
@@ -34,7 +39,7 @@ export default class RecursiveNoteDeleter extends Plugin {
 		this.addRibbonIcon('skull', 'Recursive Note Deleter', () => {
 			const activeFile = this.app.workspace.getActiveFile();
 			if (activeFile) {
-				this.deleteLinkedNotes(activeFile);
+				this.deleteLinkedNotes(activeFile).catch((err) => console.error(err));;
 			} else {
 				new Notice('No active file found. Open a note to use this plugin.');
 				console.error("No active file found. Open a note to use this plugin.")
@@ -64,13 +69,12 @@ export default class RecursiveNoteDeleter extends Plugin {
 			this.backupFiles(filesToDelete);
 		}
 
-		filesToDelete.forEach(linkedFile => {
-			// .catch fängt Fehler ab, damit Promises nicht "floaten" (Teillösung für Kat. C)
-			this.app.fileManager.trashFile(linkedFile).catch(err => console.error(err));
-		});
+		for (const linkedFile of filesToDelete) {
+			await this.app.fileManager.trashFile(linkedFile).catch(err => console.error(err));
+		};
 
 		if (this.settings.removeBacklinks) {
-			this.removeBacklinks(filesToDelete);
+			await this.removeBacklinks(filesToDelete);
 		}
 
 		this.showDeletionSuccessNotice();
@@ -147,7 +151,8 @@ export default class RecursiveNoteDeleter extends Plugin {
 		}
 
 		files.forEach(file => {
-			const filePath = path.join(this.app.vault.adapter.basePath, file.path);
+			const adapter = this.app.vault.adapter as unknown as { basePath: string };
+			const filePath = path.join(adapter.basePath, file.path);
 			const backupPath = path.join(this.settings.backupLocation, file.path);
 			const backupDir = path.dirname(backupPath);
 
@@ -161,64 +166,80 @@ export default class RecursiveNoteDeleter extends Plugin {
 		new Notice('Files backed up successfully.');
 	}
 
-	removeBacklinks(files: TFile[]) {
+	async removeBacklinks(files: TFile[]) {
 		const filePaths = files.map(file => file.path);
-		const fileNames = files.map(file => file.name.replace(/\.md\\$/, '')); // Get file names without .md extension
+		// Regex Escape Fix ist hier drin
+		const fileNames = files.map(file => file.name.replace(/\.md$/, '')); 
+		
 		console.debug('Recursive Deleter: Files to clean backlinks for:', filePaths);
-
-		if (filePaths.length === 0) {
-			return;
-		}
-
-		filePaths.forEach(filePath => {
-			// Use Obsidian's API to get backlinks
-			const backlinks = this.app.metadataCache.getBacklinksForFile(this.app.vault.getAbstractFileByPath(filePath) as TFile);
-			console.debug(`Backlinks for file ${filePath}:`, backlinks);
-
-			if (backlinks.data.size === 0) {
-				return;
+	
+		if (filePaths.length === 0) return;
+	
+		for (const filePath of filePaths) {
+			const abstractFile = this.app.vault.getAbstractFileByPath(filePath);
+			if (!(abstractFile instanceof TFile)) {
+				continue;
 			}
-
-			backlinks.data.forEach((backlinkData, backlinkPath) => {
-				const backlinkFile = this.app.vault.getAbstractFileByPath(backlinkPath) as TFile;
-				if (!backlinkFile) {
+	
+			// FIX: Wir casten den Cache auf unseren internen Typ.
+			// Damit weiß TS: "Aha, cache hat die Methode getBacklinksForFile".
+			// Der 'unsafe call' Fehler verschwindet, weil die Methode jetzt typisiert ist.
+			const cache = this.app.metadataCache as unknown as InternalMetadataCache;
+			const backlinks = cache.getBacklinksForFile(abstractFile);
+	
+			if (!backlinks || !backlinks.data || backlinks.data.size === 0) {
+				continue;
+			}
+	
+			// for...of Schleife um 'await' nutzen zu können
+			for (const [backlinkPath] of backlinks.data) { // [backlinkPath, backlinkData] möglich
+				
+				const backlinkFile = this.app.vault.getAbstractFileByPath(backlinkPath);
+	
+				if (!(backlinkFile instanceof TFile)) {
 					console.error(`No file found for path: ${backlinkPath}`);
-					return;
+					continue;
 				}
-				this.app.vault.read(backlinkFile).then((data) => {
-					if (data == null) {
-						console.error(`No data found for file: ${backlinkPath}`);
-						return;
+	
+				try {
+					const data = await this.app.vault.read(backlinkFile);
+					if (data === null) {
+						continue;
 					}
-
+	
 					let changed = false;
 					const lines = data.split('\n');
 					const newLines = [];
-
+	
 					for (let i = 0; i < lines.length; i++) {
 						let line = lines[i];
 						const trimmedLine = line.trim();
-						const isListItem = /^\s*[-*+]\s/.test(trimmedLine); // Check for list items with optional leading whitespace
+						const isListItem = /^\s*[-*+]\s/.test(trimmedLine);
 						const isStandaloneLink = /^\s*\[{2}.*?\]{2}\s*$/.test(trimmedLine) || (this.settings.considerListItemsAsStandalone && isListItem && /^\s*[-*+]\s\[{2}.*?\]{2}\s*$/.test(trimmedLine));
-
+	
 						if (isStandaloneLink) {
-							changed = true;
-							// Skip adding this line to newLines
-							continue;
+							// Prüfen ob es unser File betrifft
+							const hitsDeletedFile = fileNames.some(name => line.includes(name));
+							if (hitsDeletedFile) {
+								changed = true;
+								console.debug(`Recursive Deleter: Removed standalone link in ${backlinkPath}`);
+								continue; 
+							}
 						}
-
+	
 						fileNames.forEach(name => {
-							const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\\\$&');
+							const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 							const linkPattern = new RegExp(`\\[\\[.*?${escapedName}(?:\\.md)?(?:#.*)?\\]\\]|!\\[\\[.*?${escapedName}(?:\\.md)?(?:#.*)?\\]\\]`, 'gi');
-
+	
 							if (linkPattern.test(line)) {
 								changed = true;
+								console.debug(`Recursive Deleter: Found inline match for ${name} in ${backlinkPath}`);
 								line = line.replace(linkPattern, (match) => {
 									switch (this.settings.inlineLinkBehavior) {
 										case 'remove-link':
 											return '';
 										case 'keep-name':
-											return match.replace(/[\[\]]/g, '');
+											return match.replace(/[[\]]/g, '');
 										case 'add-note':
 											return 'BACKLINK REMOVED';
 										default:
@@ -227,19 +248,19 @@ export default class RecursiveNoteDeleter extends Plugin {
 								});
 							}
 						});
-
+	
 						newLines.push(line);
 					}
-
+	
 					if (changed) {
-						console.debug('Recursive Deleter: Saving changes to ', backlinkPath);
-						this.app.vault.modify(backlinkFile, newLines.join('\n'));
+						console.debug(`Recursive Deleter: Saving changes to ${backlinkPath}`);
+						await this.app.vault.modify(backlinkFile, newLines.join('\n'));
 					}
-				}).catch((error) => {
-					console.error(`Error reading file: ${backlinkPath}`, error);
-				});
-			});
-		});
+				} catch (error) {
+					console.error(`Error processing file: ${backlinkPath}`, error);
+				}
+			}
+		}
 	}
 
 	showNoFilesFoundNotice() {
@@ -269,7 +290,7 @@ export default class RecursiveNoteDeleter extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData()) as RecursiveNoteDeleterSettings;
 	}
 
 	async saveSettings() {
@@ -360,53 +381,41 @@ class RecursiveNoteDeleterSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
-		const backupLocationSetting = new Setting(containerEl)
+		new Setting(containerEl)
 			.setName('Backup location')
-			.setDesc('Set the folder location for backing up files.')
-			.addButton(button => {
-				button.setButtonText('Choose folder');
-				button.onClick(async () => {
-					const { dialog } = require('electron').remote;
-					const folder = await dialog.showOpenDialog({
-						properties: ['openDirectory'],
-					});
-					if (folder && folder.filePaths.length > 0) {
-						this.plugin.settings.backupLocation = folder.filePaths[0];
-						await this.plugin.saveSettings();
-						backupLocationSetting.setDesc(this.plugin.settings.backupLocation);
-						enableBackupSetting.setDisabled(false);
-						new Notice('Backup location set successfully.');
+			.setDesc('Absolute path to the backup folder (e.g., /Users/Name/Documents/Backup). Please create the folder manually.')
+			.addText(text => text
+				.setPlaceholder('/path/to/folder')
+				.setValue(this.plugin.settings.backupLocation)
+				.onChange(async (value) => {
+					this.plugin.settings.backupLocation = value;
+					await this.plugin.saveSettings();
+					
+					// Prüfen ob Pfad existiert (optionales UX Feature)
+					// Wir nutzen fs nur, wenn wir sicher am Desktop sind, 
+					// aber für den Linter ist das hier sauberer als require.
+					if (value.trim() !== '') {
+						// enableBackupSetting unten aktivieren/deaktivieren
+						// Da wir hier keinen direkten Zugriff auf die Variable 'enableBackupSetting' haben 
+						// (außer wir strukturieren um), lassen wir es simpel.
+						// Der User merkt beim Backup-Versuch, ob der Pfad stimmt.
 					}
-				});
-				return button;
-			});
-
-		if (this.plugin.settings.backupLocation) {
-			backupLocationSetting.setDesc(this.plugin.settings.backupLocation);
-		} else {
-			backupLocationSetting.setDesc('No folder selected');
-		}
-
-		const enableBackupSetting = new Setting(containerEl)
+				}));
+		
+		new Setting(containerEl)
 			.setName('Enable backup')
-			.setDesc('Enable backing up files on deletion.')
-			.addToggle(toggle => {
-				toggle.setValue(this.plugin.settings.enableBackup);
-				toggle.onChange(async (value) => {
+			.setDesc('Enable backing up files to the specified location before deletion.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableBackup)
+				.onChange(async (value) => {
+					if (value && !this.plugin.settings.backupLocation) {
+						new Notice('Please set a backup location first.');
+						// Reset toggle visual state if needed, or just allow it and fail later
+						toggle.setValue(false);
+						return;
+					}
 					this.plugin.settings.enableBackup = value;
 					await this.plugin.saveSettings();
-				});
-				if (!this.plugin.settings.backupLocation) {
-					toggle.setDisabled(true);
-					toggle.toggleEl.addEventListener('click', () => {
-						if (!this.plugin.settings.backupLocation) {
-							new Notice('Backup location is not set. Please choose a backup location first.');
-						}
-					});
-				} else {
-					toggle.setDisabled(false);
-				}
-				return toggle;
-			});
+				}));
 	}
 }
