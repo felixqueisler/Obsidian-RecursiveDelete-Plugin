@@ -65,7 +65,8 @@ export default class RecursiveNoteDeleter extends Plugin {
 		}
 
 		filesToDelete.forEach(linkedFile => {
-			this.app.vault.delete(linkedFile);
+			// .catch fängt Fehler ab, damit Promises nicht "floaten" (Teillösung für Kat. C)
+			this.app.fileManager.trashFile(linkedFile).catch(err => console.error(err));
 		});
 
 		if (this.settings.removeBacklinks) {
