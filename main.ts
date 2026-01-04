@@ -31,7 +31,7 @@ export default class RecursiveNoteDeleter extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		this.addRibbonIcon('skull', 'Recursive Delete Linked Notes', () => {
+		this.addRibbonIcon('skull', 'Recursive Note Deleter', () => {
 			const activeFile = this.app.workspace.getActiveFile();
 			if (activeFile) {
 				this.deleteLinkedNotes(activeFile);
@@ -209,7 +209,7 @@ export default class RecursiveNoteDeleter extends Plugin {
 
 						if (isStandaloneLink) {
 							changed = true;
-							console.log(`Removed standalone backlink in file: ${backlinkPath}`);
+							console.debug(`Removed standalone backlink in file: ${backlinkPath}`);
 							// Skip adding this line to newLines
 							continue;
 						}
@@ -302,8 +302,8 @@ class RecursiveNoteDeleterSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Confirm Deletion')
-			.setDesc('Ask for confirmation before deleting linked notes and attachments.')
+			.setName('Confirm deletion')
+			.setDesc('Ask for confirmation in a dialog before deleting linked notes and attachments. Deactive only to instantly delete (ultra risky).')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.confirmDeletion)
 				.onChange(async (value) => {
@@ -312,8 +312,8 @@ class RecursiveNoteDeleterSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Recursive Delete')
-			.setDesc('Delete linked notes and attachments recursively.')
+			.setName('Recursively delete')
+			.setDesc('Delete linked notes and attachments recursively. The depth is unlimited: beware, that this could delete big parts of your vault.')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.recursiveDelete)
 				.onChange(async (value) => {
@@ -322,7 +322,7 @@ class RecursiveNoteDeleterSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Delete Mode')
+			.setName('Delete mode')
 			.setDesc('Choose what to delete: notes, attachments, or both.')
 			.addDropdown(dropdown => dropdown
 				.addOptions({
@@ -337,7 +337,7 @@ class RecursiveNoteDeleterSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Remove Backlinks')
+			.setName('Remove backlinks')
 			.setDesc('Automatically remove backlinks to deleted files.')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.removeBacklinks)
@@ -347,7 +347,7 @@ class RecursiveNoteDeleterSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Inline Link Behavior')
+			.setName('Inline link behavior')
 			.setDesc('Choose how to handle inline links when removing backlinks.')
 			.addDropdown(dropdown => dropdown
 				.addOptions({
@@ -362,8 +362,8 @@ class RecursiveNoteDeleterSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Consider List Items as Standalone')
-			.setDesc('Treat list items with standalone links as standalone links for removal.')
+			.setName('Consider list item-links as standalone links')
+			.setDesc('Treat list items with standalone links as standalone links for removal. Meaning: the whole list item gets removed. If deactivated it will leave behind a bullet point.')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.considerListItemsAsStandalone)
 				.onChange(async (value) => {
@@ -372,10 +372,10 @@ class RecursiveNoteDeleterSettingTab extends PluginSettingTab {
 				}));
 
 		const backupLocationSetting = new Setting(containerEl)
-			.setName('Backup Location')
+			.setName('Backup location')
 			.setDesc('Set the folder location for backing up files.')
 			.addButton(button => {
-				button.setButtonText('Choose Folder');
+				button.setButtonText('Choose folder');
 				button.onClick(async () => {
 					const { dialog } = require('electron').remote;
 					const folder = await dialog.showOpenDialog({
@@ -399,8 +399,8 @@ class RecursiveNoteDeleterSettingTab extends PluginSettingTab {
 		}
 
 		const enableBackupSetting = new Setting(containerEl)
-			.setName('Enable Backup')
-			.setDesc('Enable backing up files before deletion.')
+			.setName('Enable backup')
+			.setDesc('Enable backing up files on deletion.')
 			.addToggle(toggle => {
 				toggle.setValue(this.plugin.settings.enableBackup);
 				toggle.onChange(async (value) => {
