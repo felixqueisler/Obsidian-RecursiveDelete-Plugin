@@ -3,6 +3,8 @@ import { FileListModal } from './file-list-modal';
 import * as fs from 'fs';
 import * as path from 'path';
 
+const PLUGIN_NAME = "Recursive Note Deleter";
+
 // Definition für die interne Obsidian API, damit TypeScript nicht meckert
 interface InternalMetadataCache {
 	getBacklinksForFile(file: TFile): { data: Map<string, LinkCache[]> } | null;
@@ -36,7 +38,7 @@ export default class RecursiveNoteDeleter extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		this.addRibbonIcon('skull', 'Recursive Note Deleter', () => {
+		this.addRibbonIcon('skull', PLUGIN_NAME, () => {
 			const activeFile = this.app.workspace.getActiveFile();
 			if (activeFile) {
 				this.deleteLinkedNotes(activeFile).catch((err) => console.error(err));;

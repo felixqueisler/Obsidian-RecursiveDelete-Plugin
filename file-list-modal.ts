@@ -14,7 +14,7 @@ export class FileListModal extends Modal {
 		const { contentEl, modalEl } = this;
 		const fileCount = this.files.length;
 
-		this.setTitle(`Recursive Note Deleter`);
+		this.setTitle(PLUGIN_NAME);
 
 		modalEl.addClass('recursive-delete-modal');
 
