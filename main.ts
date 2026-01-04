@@ -36,7 +36,8 @@ export default class RecursiveNoteDeleter extends Plugin {
 			if (activeFile) {
 				this.deleteLinkedNotes(activeFile);
 			} else {
-				new Notice('No active file found.');
+				new Notice('No active file found. Open a note to use this plugin.');
+				console.error("No active file found. Open a note to use this plugin.")
 			}
 		});
 
@@ -209,7 +210,7 @@ export default class RecursiveNoteDeleter extends Plugin {
 
 						if (isStandaloneLink) {
 							changed = true;
-							console.debug(`Removed standalone backlink in file: ${backlinkPath}`);
+							console.log(`Removed standalone backlink in file: ${backlinkPath}`);
 							// Skip adding this line to newLines
 							continue;
 						}
