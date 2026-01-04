@@ -208,7 +208,7 @@ export default class RecursiveNoteDeleter extends Plugin {
 						}
 
 						fileNames.forEach(name => {
-							const escapedName = name.replace(/[.*+?^\\${}()|[\]\\]/g, '\\\\$&'); // Escape special characters
+							const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\\\$&');
 							const linkPattern = new RegExp(`\\[\\[.*?${escapedName}(?:\\.md)?(?:#.*)?\\]\\]|!\\[\\[.*?${escapedName}(?:\\.md)?(?:#.*)?\\]\\]`, 'gi');
 
 							if (linkPattern.test(line)) {
