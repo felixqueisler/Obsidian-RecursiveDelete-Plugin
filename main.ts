@@ -98,7 +98,7 @@ export default class RecursiveNoteDeleter extends Plugin {
 					}
 				});
 			} else {
-				console.warn(`No links found or links is not an array in cache for file: ${file.path}`);
+				console.debug(`No links found or links is not an array in cache for file: ${file.path}`);
 			}
 
 			const embeds = cache.embeds;
@@ -110,10 +110,10 @@ export default class RecursiveNoteDeleter extends Plugin {
 					}
 				});
 			} else {
-				console.warn(`No embeds found or embeds is not an array in cache for file: ${file.path}`);
+				console.debug(`No embeds found or embeds is not an array in cache for file: ${file.path}`);
 			}
 		} else {
-			console.warn(`No cache found or file already visited: ${file.path}`);
+			console.debug(`No cache found or file already visited: ${file.path}`);
 		}
 
 		return Array.from(linkedFilesSet);
@@ -161,25 +161,20 @@ export default class RecursiveNoteDeleter extends Plugin {
 	}
 
 	removeBacklinks(files: TFile[]) {
-		console.log('removeBacklinks method triggered');
 		const filePaths = files.map(file => file.path);
 		const fileNames = files.map(file => file.name.replace(/\.md\\$/, '')); // Get file names without .md extension
-		console.log('Files to remove backlinks for:', filePaths);
+		console.debug('Recursive Deleter: Files to clean backlinks for:', filePaths);
 
 		if (filePaths.length === 0) {
-			console.log('No files to process for backlink removal.');
 			return;
 		}
 
 		filePaths.forEach(filePath => {
-			console.log(`Processing file: ${filePath}`);
-
 			// Use Obsidian's API to get backlinks
 			const backlinks = this.app.metadataCache.getBacklinksForFile(this.app.vault.getAbstractFileByPath(filePath) as TFile);
-			console.log(`Backlinks for file ${filePath}:`, backlinks);
+			console.debug(`Backlinks for file ${filePath}:`, backlinks);
 
 			if (backlinks.data.size === 0) {
-				console.log(`No backlinks found for file: ${filePath}`);
 				return;
 			}
 
@@ -189,14 +184,11 @@ export default class RecursiveNoteDeleter extends Plugin {
 					console.error(`No file found for path: ${backlinkPath}`);
 					return;
 				}
-				console.log(`Processing backlink in file: ${backlinkPath}`);
-
 				this.app.vault.read(backlinkFile).then((data) => {
 					if (data == null) {
 						console.error(`No data found for file: ${backlinkPath}`);
 						return;
 					}
-					console.log(`File data for ${backlinkPath}:`, data);
 
 					let changed = false;
 					const lines = data.split('\n');
@@ -210,19 +202,16 @@ export default class RecursiveNoteDeleter extends Plugin {
 
 						if (isStandaloneLink) {
 							changed = true;
-							console.log(`Removed standalone backlink in file: ${backlinkPath}`);
 							// Skip adding this line to newLines
 							continue;
 						}
 
 						fileNames.forEach(name => {
 							const escapedName = name.replace(/[.*+?^\\${}()|[\]\\]/g, '\\\\$&'); // Escape special characters
-							console.log(`Checking name against regex: ${name}`);
 							const linkPattern = new RegExp(`\\[\\[.*?${escapedName}(?:\\.md)?(?:#.*)?\\]\\]|!\\[\\[.*?${escapedName}(?:\\.md)?(?:#.*)?\\]\\]`, 'gi');
 
 							if (linkPattern.test(line)) {
 								changed = true;
-								console.log(`Found inline backlink to ${name} in file: ${backlinkPath}`);
 								line = line.replace(linkPattern, (match) => {
 									switch (this.settings.inlineLinkBehavior) {
 										case 'remove-link':
@@ -242,10 +231,8 @@ export default class RecursiveNoteDeleter extends Plugin {
 					}
 
 					if (changed) {
-						console.log(`Modifying file: ${backlinkPath}`);
+						console.debug('Recursive Deleter: Saving changes to ', backlinkPath);
 						this.app.vault.modify(backlinkFile, newLines.join('\n'));
-					} else {
-						console.log(`No changes needed for file: ${backlinkPath}`);
 					}
 				}).catch((error) => {
 					console.error(`Error reading file: ${backlinkPath}`, error);
