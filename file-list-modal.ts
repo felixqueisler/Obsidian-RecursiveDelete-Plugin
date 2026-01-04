@@ -1,5 +1,7 @@
 import { App, Modal, TFile, ButtonComponent } from 'obsidian';
 
+const PLUGIN_NAME = "Recursive Note Deleter";
+
 export class FileListModal extends Modal {
 	files: TFile[];
 	onConfirm: (result: boolean) => void;
